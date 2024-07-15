@@ -54,7 +54,7 @@ pub async fn api() {
         // `GET /history?alias={alias}` goes to `get_history`
         .route("/history", get(get_history))
         // `POST /operation` goes to `add_operation`
-        .route("/operation", post(add_operation))
+        .route("/operation", get(add_operation))
         .with_state(db.clone());
 
     // run our app with hyper, listening globally on port 3000
@@ -158,7 +158,7 @@ async fn get_history(
 #[debug_handler]
 async fn add_operation(
     State(db): State<Arc<Mutex<Database>>>,
-    Json(operation): Json<OperationQuery>,
+    Query(operation): Query<OperationQuery>,
 ) -> StatusCode {
     let mut db = db.lock().unwrap();
 
