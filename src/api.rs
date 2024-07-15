@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
     Json, Router,
+    debug_handler,
 };
 use chrono;
 use serde::{Deserialize, Serialize};
@@ -99,23 +100,24 @@ impl Database {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ContactsQuery {
     number: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct HistoryQuery {
     number: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct OperationQuery {
     from: String,
     to: String,
     value: u32,
 }
 
+#[debug_handler]
 async fn get_contacts(
     Query(params): Query<ContactsQuery>,
     State(db): State<Arc<Mutex<Database>>>,
@@ -124,6 +126,7 @@ async fn get_contacts(
     Json(db.get_contacts(&params.number))
 }
 
+#[debug_handler]
 async fn get_history(
     Query(params): Query<HistoryQuery>,
     State(db): State<Arc<Mutex<Database>>>,
@@ -132,9 +135,10 @@ async fn get_history(
     Json(db.get_history(&params.number))
 }
 
+#[debug_handler]
 async fn add_operation(
-    Json(operation): Json<OperationQuery>,
     State(db): State<Arc<Mutex<Database>>>,
+    Json(operation): Json<OperationQuery>,
 ) -> StatusCode {
     let mut db = db.lock().unwrap();
     db.add_operation(Operation {
@@ -146,7 +150,7 @@ async fn add_operation(
     StatusCode::CREATED
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct User {
     number: String,
     name: String,
@@ -155,7 +159,7 @@ struct User {
     history: Vec<Operation>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Operation {
     from: String,
     to: String,
