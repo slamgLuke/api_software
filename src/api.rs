@@ -4,6 +4,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
@@ -33,6 +34,10 @@ pub async fn api() {
         .route("/", get(root))
         // `GET /contacts?alias={alias}` goes to `get_contacts`
         .route("/contacts", get(get_contacts))
+        // `GET /history?alias={alias}` goes to `get_history`
+        .route("/history", get(get_history))
+        // `POST /operation` goes to `add_operation`
+        .route("/operation", post(add_operation))
         .with_state(db.clone());
 
     // run our app with hyper, listening globally on port 3000
@@ -50,6 +55,7 @@ async fn root() -> &'static str {
     "Hello, World!"
 }
 
+#[derive(Deserialize)]
 struct Database {
     users: Vec<User>,
 }
@@ -115,9 +121,32 @@ async fn get_contacts(
     State(db): State<Arc<Mutex<Database>>>,
 ) -> Json<Vec<String>> {
     let db = db.lock().unwrap();
-    Json(db.get_contacts(&params.alias))
+    Json(db.get_contacts(&params.number))
 }
 
+async fn get_history(
+    Query(params): Query<HistoryQuery>,
+    State(db): State<Arc<Mutex<Database>>>,
+) -> Json<Vec<Operation>> {
+    let db = db.lock().unwrap();
+    Json(db.get_history(&params.number))
+}
+
+async fn add_operation(
+    Json(operation): Json<OperationQuery>,
+    State(db): State<Arc<Mutex<Database>>>,
+) -> StatusCode {
+    let mut db = db.lock().unwrap();
+    db.add_operation(Operation {
+        from: operation.from,
+        to: operation.to,
+        value: operation.value,
+        date: chrono::offset::Local::now().to_string(),
+    });
+    StatusCode::CREATED
+}
+
+#[derive(Clone, Deserialize)]
 struct User {
     number: String,
     name: String,
@@ -126,7 +155,7 @@ struct User {
     history: Vec<Operation>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 struct Operation {
     from: String,
     to: String,
