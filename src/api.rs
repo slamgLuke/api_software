@@ -1,9 +1,9 @@
 use axum::{
+    debug_handler,
     extract::{Query, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
-    debug_handler,
 };
 use chrono;
 use serde::{Deserialize, Serialize};
@@ -23,8 +23,24 @@ pub async fn api() {
         db.add_user(User {
             number: "123".to_string(),
             name: "Marcelo".to_string(),
-            balance: 0,
-            contacts: vec!["456".to_string()],
+            balance: 100,
+            contacts: vec!["456".to_string(), "789".to_string()],
+            history: vec![],
+        });
+
+        db.add_user(User {
+            number: "456".to_string(),
+            name: "Juan".to_string(),
+            balance: 200,
+            contacts: vec!["123".to_string()],
+            history: vec![],
+        });
+
+        db.add_user(User {
+            number: "789".to_string(),
+            name: "Pedro".to_string(),
+            balance: 300,
+            contacts: vec!["123".to_string()],
             history: vec![],
         });
     }
@@ -65,6 +81,10 @@ struct Database {
 impl Database {
     fn add_user(&mut self, user: User) {
         self.users.push(user);
+    }
+
+    fn get_user(&self, number: &str) -> Option<&User> {
+        self.users.iter().find(|u| u.number == number)
     }
 
     fn get_contacts(&self, number: &str) -> Vec<String> {
@@ -141,6 +161,21 @@ async fn add_operation(
     Json(operation): Json<OperationQuery>,
 ) -> StatusCode {
     let mut db = db.lock().unwrap();
+
+    let user_from = db.get_user(&operation.from);
+
+    let user_to = db.get_user(&operation.to);
+
+    if user_from.is_none() || user_to.is_none() {
+        return StatusCode::BAD_REQUEST;
+    }
+
+    let user_from = user_from.unwrap();
+
+    if user_from.balance < operation.value {
+        return StatusCode::BAD_REQUEST;
+    }
+
     db.add_operation(Operation {
         from: operation.from,
         to: operation.to,
