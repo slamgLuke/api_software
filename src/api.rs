@@ -5,7 +5,6 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Deserializer, Serializer};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
@@ -14,30 +13,17 @@ pub async fn api() {
     // tracing_subscriber::fmt::init();
 
     // init db
-    let db = Arc::new(Mutex::new(Database {
-        users: vec![],
-        messages: vec![],
-    }));
+    let db = Arc::new(Mutex::new(Database { users: vec![] }));
 
     // 3 dummy users
     {
         let mut db = db.lock().unwrap();
         db.add_user(User {
-            alias: "anlec".to_string(),
+            number: "123".to_string(),
             name: "Marcelo".to_string(),
-            contacts: vec!["rudolfinsito".to_string(), "lenx".to_string()],
-        });
-
-        db.add_user(User {
-            alias: "rudolfinsito".to_string(),
-            name: "Lucas".to_string(),
-            contacts: vec!["anlec".to_string()],
-        });
-
-        db.add_user(User {
-            alias: "lenx".to_string(),
-            name: "Lenin".to_string(),
-            contacts: vec!["anlec".to_string()],
+            balance: 0,
+            contacts: vec!["456".to_string()],
+            history: vec![],
         });
     }
 
@@ -66,7 +52,6 @@ async fn root() -> &'static str {
 
 struct Database {
     users: Vec<User>,
-    messages: Vec<Message>,
 }
 
 // add user to Database
@@ -75,30 +60,54 @@ impl Database {
         self.users.push(user);
     }
 
-    fn get_contacts(&self, alias: &str) -> Vec<String> {
-        let user = self.users.iter().find(|u| u.alias == alias);
+    fn get_contacts(&self, number: &str) -> Vec<String> {
+        let user = self.users.iter().find(|u| u.number == number);
         match user {
             Some(user) => user.contacts.clone(),
             None => vec!["User not found".to_string()],
         }
     }
 
-    fn send_message(&mut self, message: Message) {
-        self.messages.push(message);
+    fn get_history(&self, number: &str) -> Vec<Operation> {
+        let user = self.users.iter().find(|u| u.number == number);
+        match user {
+            Some(user) => user.history.clone(),
+            None => vec![Operation {
+                from: "User not found".to_string(),
+                to: "User not found".to_string(),
+                value: 0,
+                date: "User not found".to_string(),
+            }],
+        }
     }
 
-    fn get_messages(&self, alias: &str) -> Vec<Message> {
-        self.messages
-            .iter()
-            .filter(|m| m.to == alias)
-            .cloned()
-            .collect()
+    fn add_operation(&mut self, operation: Operation) {
+        let user = self
+            .users
+            .iter_mut()
+            .find(|u| u.number == operation.from || u.number == operation.to);
+        match user {
+            Some(user) => user.history.push(operation),
+            None => (),
+        }
     }
 }
 
 #[derive(Deserialize)]
 struct ContactsQuery {
-    alias: String,
+    number: String,
+}
+
+#[derive(Deserialize)]
+struct HistoryQuery {
+    number: String,
+}
+
+#[derive(Serialize)]
+struct OperationQuery {
+    from: String,
+    to: String,
+    value: u32,
 }
 
 async fn get_contacts(
@@ -110,16 +119,18 @@ async fn get_contacts(
 }
 
 struct User {
-    alias: String,
+    number: String,
     name: String,
+    balance: u32,
     contacts: Vec<String>,
+    history: Vec<Operation>,
 }
 
 #[derive(Clone)]
-struct Message {
+struct Operation {
     from: String,
     to: String,
-    content: String,
+    value: u32,
     date: String,
 }
 
