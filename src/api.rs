@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
-pub async fn api() {
+pub async fn api(ip: String) {
     // initialize tracing
     // tracing_subscriber::fmt::init();
 
@@ -57,7 +57,7 @@ pub async fn api() {
         .with_state(db.clone());
 
     // run our app with hyper, listening globally on port 3000
-    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = TcpListener::bind(ip).await.unwrap();
     // axum::Server::from_tcp(listener)
     //     .unwrap()
     //     .serve(app.into_make_service())
