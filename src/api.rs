@@ -1,7 +1,6 @@
 use axum::{
     debug_handler,
     extract::{Query, State},
-    http::StatusCode,
     routing::get,
     Json, Router,
 };
@@ -87,12 +86,27 @@ impl Database {
         self.users.iter().find(|u| u.number == number)
     }
 
-    fn get_contacts(&self, number: &str) -> Vec<String> {
+    fn get_contacts(&self, number: &str) -> Option<Vec<(String, String)>> {
         let user = self.users.iter().find(|u| u.number == number);
-        match user {
-            Some(user) => user.contacts.clone(),
-            None => vec!["User not found".to_string()],
+        if user.is_none() {
+            return None;
         }
+
+        let user = user.unwrap();
+        let contacts = user
+            .contacts
+            .iter()
+            .map(|c| {
+                let contact = self.users.iter().find(|u| u.number == *c);
+                match contact {
+                    Some(contact) => Some((contact.name.clone(), contact.number.clone())),
+                    None => None,
+                }
+            })
+            .filter(|c| c.is_some())
+            .map(|c| c.unwrap())
+            .collect::<Vec<(String, String)>>();
+        Some(contacts)
     }
 
     fn get_history(&self, number: &str) -> Option<(User, Vec<Operation>)> {
@@ -162,9 +176,20 @@ struct OperationQuery {
 async fn get_contacts(
     Query(params): Query<ContactsQuery>,
     State(db): State<Arc<Mutex<Database>>>,
-) -> Json<Vec<String>> {
+) -> String {
     let db = db.lock().unwrap();
-    Json(db.get_contacts(&params.number))
+    let contacts = db.get_contacts(&params.number);
+
+    if contacts.is_none() {
+        return "User not found".to_string();
+    }
+
+    let contacts = contacts.unwrap();
+    let mut str = "".to_string();
+    for (name, number) in contacts.iter() {
+        str.push_str(&format!("{}: {}\n", name, number));
+    }
+    str
 }
 
 #[debug_handler]
@@ -178,21 +203,34 @@ async fn get_history(
         return "User not found".to_string();
     }
     let (user_data, received_transactions) = data.unwrap();
-    let mut combined_transactions = user_data.history.iter().chain(received_transactions.iter()).collect::<Vec<&Operation>>();
+    let mut combined_transactions = user_data
+        .history
+        .iter()
+        .chain(received_transactions.iter())
+        .collect::<Vec<&Operation>>();
 
     // sort by date (string)
     combined_transactions.sort_by(|a, b| a.date.cmp(&b.date));
     combined_transactions.reverse();
 
-    let mut str = format!("{}'s balance: {}\n{}'s operations\n", user_data.name, user_data.balance, user_data.name);
+    let mut str = format!(
+        "{}'s balance: {}\n{}'s operations\n",
+        user_data.name, user_data.balance, user_data.name
+    );
     for operation in combined_transactions.iter() {
         if operation.from == user_data.number {
-            str.push_str(&format!("Sent {} to {} at {}\n", operation.value, operation.to, operation.date));
+            str.push_str(&format!(
+                "Sent {} to {} at {}\n",
+                operation.value, operation.to, operation.date
+            ));
         } else {
-            str.push_str(&format!("Received {} from {} at {}\n", operation.value, operation.from, operation.date));
+            str.push_str(&format!(
+                "Received {} from {} at {}\n",
+                operation.value, operation.from, operation.date
+            ));
         }
     }
-    
+
     str
 }
 
@@ -202,9 +240,7 @@ async fn make_operation(
     Query(operation): Query<OperationQuery>,
 ) -> String {
     let mut db = db.lock().unwrap();
-
     let user_from = db.get_user(&operation.from);
-
     let user_to = db.get_user(&operation.to);
 
     if user_from.is_none() || user_to.is_none() {
