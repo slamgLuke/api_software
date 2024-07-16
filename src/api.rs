@@ -220,12 +220,4 @@ struct Operation {
     date: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[tokio::test]
-    async fn test_get() {
-        assert_eq!("hola", "hola")
-    }
-}

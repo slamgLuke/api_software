@@ -1,4 +1,5 @@
 mod api;
+mod unit_testing;
 
 #[tokio::main]
 async fn main() {
