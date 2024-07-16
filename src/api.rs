@@ -54,7 +54,7 @@ pub async fn api() {
         // `GET /history?alias={alias}` goes to `get_history`
         .route("/history", get(get_history))
         // `POST /operation` goes to `add_operation`
-        .route("/operation", get(add_operation))
+        .route("/operation", get(make_operation))
         .with_state(db.clone());
 
     // run our app with hyper, listening globally on port 3000
@@ -108,6 +108,24 @@ impl Database {
         }
     }
 
+    fn make_operation(&mut self, operation: Operation) {
+        let user_from = self.users.iter_mut().find(|u| u.number == operation.from);
+
+        match user_from {
+            Some(user) => user.balance -= operation.value,
+            None => (),
+        }
+
+        let user_to = self.users.iter_mut().find(|u| u.number == operation.to);
+
+        match user_to {
+            Some(user) => user.balance += operation.value,
+            None => (),
+        }
+
+        self.add_operation(operation);
+    }
+
     fn add_operation(&mut self, operation: Operation) {
         let user = self
             .users
@@ -156,7 +174,7 @@ async fn get_history(
 }
 
 #[debug_handler]
-async fn add_operation(
+async fn make_operation(
     State(db): State<Arc<Mutex<Database>>>,
     Query(operation): Query<OperationQuery>,
 ) -> StatusCode {
@@ -176,7 +194,7 @@ async fn add_operation(
         return StatusCode::BAD_REQUEST;
     }
 
-    db.add_operation(Operation {
+    db.make_operation(Operation {
         from: operation.from,
         to: operation.to,
         value: operation.value,
