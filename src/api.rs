@@ -95,23 +95,20 @@ impl Database {
         }
     }
 
-    fn get_history(&self, number: &str) -> Vec<Operation> {
+    fn get_history(&self, number: &str) -> Option<(User, Vec<Operation>)> {
         let user = self.users.iter().find(|u| u.number == number);
-        match user {
-            Some(user) => {
-                print!("Retrieved history from user: {:#?}", user);
-                user.history.clone(),
-            }
-            None => {
-                println!("User not found");
-                vec![Operation {
-                from: "User not found".to_string(),
-                to: "User not found".to_string(),
-                value: 0,
-                date: "User not found".to_string(),
-                }],
-            }
+        let received_transactions = self
+            .users
+            .iter()
+            .filter(|u| u.number != number)
+            .filter(|u| u.contacts.contains(&number.to_string()))
+            .flat_map(|u| u.history.iter().cloned())
+            .collect::<Vec<Operation>>();
+        if user.is_none() {
+            return None;
         }
+        let user = user.unwrap();
+        Some((user.clone(), received_transactions))
     }
 
     fn make_operation(&mut self, operation: Operation) {
@@ -174,9 +171,29 @@ async fn get_contacts(
 async fn get_history(
     Query(params): Query<HistoryQuery>,
     State(db): State<Arc<Mutex<Database>>>,
-) -> Json<Vec<Operation>> {
+) -> String {
     let db = db.lock().unwrap();
-    Json(db.get_history(&params.number))
+    let data = db.get_history(&params.number);
+    if data.is_none() {
+        return "User not found".to_string();
+    }
+    let (user_data, received_transactions) = data.unwrap();
+    let mut combined_transactions = user_data.history.iter().chain(received_transactions.iter()).collect::<Vec<&Operation>>();
+
+    // sort by date (string)
+    combined_transactions.sort_by(|a, b| a.date.cmp(&b.date));
+    combined_transactions.reverse();
+
+    let mut str = format!("{}'s balance: {}\n{}'s operations\n", user_data.name, user_data.balance, user_data.name);
+    for operation in combined_transactions.iter() {
+        if operation.from == user_data.number {
+            str.push_str(&format!("Sent {} to {} at {}\n", operation.value, operation.to, operation.date));
+        } else {
+            str.push_str(&format!("Received {} from {} at {}\n", operation.value, operation.from, operation.date));
+        }
+    }
+    
+    str
 }
 
 #[debug_handler]
@@ -230,5 +247,3 @@ struct Operation {
     value: u32,
     date: String,
 }
-
-
