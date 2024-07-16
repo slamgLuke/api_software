@@ -2,7 +2,7 @@ use axum::{
     debug_handler,
     extract::{Query, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use chrono;
@@ -98,13 +98,19 @@ impl Database {
     fn get_history(&self, number: &str) -> Vec<Operation> {
         let user = self.users.iter().find(|u| u.number == number);
         match user {
-            Some(user) => user.history.clone(),
-            None => vec![Operation {
+            Some(user) => {
+                print!("Retrieved history from user: {:#?}", user);
+                user.history.clone(),
+            }
+            None => {
+                println!("User not found");
+                vec![Operation {
                 from: "User not found".to_string(),
                 to: "User not found".to_string(),
                 value: 0,
                 date: "User not found".to_string(),
-            }],
+                }],
+            }
         }
     }
 
@@ -177,7 +183,7 @@ async fn get_history(
 async fn make_operation(
     State(db): State<Arc<Mutex<Database>>>,
     Query(operation): Query<OperationQuery>,
-) -> StatusCode {
+) -> String {
     let mut db = db.lock().unwrap();
 
     let user_from = db.get_user(&operation.from);
@@ -185,25 +191,30 @@ async fn make_operation(
     let user_to = db.get_user(&operation.to);
 
     if user_from.is_none() || user_to.is_none() {
-        return StatusCode::BAD_REQUEST;
+        println!("Operation with invalid user");
+        return "Operation with invalid user".to_string();
     }
 
     let user_from = user_from.unwrap();
 
     if user_from.balance < operation.value {
-        return StatusCode::BAD_REQUEST;
+        println!("Operation with insufficient funds");
+        return "Operation with insufficient funds".to_string();
     }
 
-    db.make_operation(Operation {
+    let operation = Operation {
         from: operation.from,
         to: operation.to,
         value: operation.value,
         date: chrono::offset::Local::now().to_string(),
-    });
-    StatusCode::CREATED
+    };
+
+    println!("Operation made: {:#?}", operation);
+    db.make_operation(operation);
+    "Operation made".to_string()
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct User {
     number: String,
     name: String,
@@ -212,7 +223,7 @@ struct User {
     history: Vec<Operation>,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Operation {
     from: String,
     to: String,
