@@ -255,6 +255,11 @@ async fn make_operation(
         return "Operation with insufficient funds".to_string();
     }
 
+    if operation.value == 0 {
+        println!("Operation with value 0");
+        return "Operation with value 0".to_string();
+    }
+
     let operation = Operation {
         from: operation.from,
         to: operation.to,
